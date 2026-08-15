@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import base64
 import html
 import json
 import urllib.error
@@ -24,7 +25,8 @@ st.markdown(
     .health.warn {background:#fff5dc;color:#815900;border:1px solid #e1b951;}
     .health.bad {background:#ffeded;color:#9a1e1e;border:1px solid #dc7979;}
     .queue-card {border:3px solid #687184;border-radius:15px;padding:.85rem 1rem;margin:.45rem 0;background:rgba(120,130,145,.06);box-shadow:0 1px 4px rgba(0,0,0,.07);}
-    .queue-card.red {border-color:#c62828;background:#fff0f0}.queue-card.blue {border-color:#1565c0;background:#eef6ff}
+    .queue-card.red {border-color:#c62828;background:#fff0f0;color:#251717!important}.queue-card.blue {border-color:#1565c0;background:#eef6ff;color:#13263b!important}
+    .queue-card.red .queue-match,.queue-card.red .queue-meta{color:#251717!important}.queue-card.blue .queue-match,.queue-card.blue .queue-meta{color:#13263b!important}
     .queue-card.now {border-width:4px;padding:1rem 1.15rem;}
     .queue-role {font-size:.78rem;font-weight:950;letter-spacing:.09em;}
     .queue-card.red .queue-role{color:#a11919}.queue-card.blue .queue-role{color:#0d55a4}
@@ -38,12 +40,19 @@ st.markdown(
     .fight-no{font-weight:900}.fight-time{font-size:.8rem;opacity:.7}.fight-match{font-weight:800;min-width:0}.fight-detail{font-size:.75rem;opacity:.7;font-weight:500}
     .status-chip{font-size:.7rem;font-weight:850;padding:.2rem .42rem;border-radius:999px;background:rgba(110,120,135,.14);white-space:nowrap}
     .division-banner {border-radius:12px;padding:.62rem .78rem;margin:.65rem 0 .45rem;border:2px solid #687184;background:rgba(120,130,145,.05);}
-    .division-banner.red{border-color:#c62828;background:#fff4f4}.division-banner.blue{border-color:#1565c0;background:#f2f8ff}
+    .division-banner.red{border-color:#c62828;background:#fff4f4;color:#251717!important}.division-banner.blue{border-color:#1565c0;background:#f2f8ff;color:#13263b!important}
+    .division-banner.red .division-title,.division-banner.red .division-sub{color:#251717!important}.division-banner.blue .division-title,.division-banner.blue .division-sub{color:#13263b!important}
     .division-title{font-weight:900;font-size:1.02rem}.division-sub{font-size:.78rem;opacity:.7;text-transform:uppercase;letter-spacing:.05em;font-weight:800}
     .group-card {border:3px solid rgba(80,90,110,.55);border-radius:12px;overflow:hidden;margin:.5rem 0 1.1rem;background:rgba(120,130,145,.055);box-shadow:0 1px 4px rgba(0,0,0,.06)}
     .group-title {font-size:1.08rem;font-weight:900;padding:.55rem .75rem;background:rgba(105,115,130,.18);border-bottom:2px solid rgba(80,90,110,.4)}
     .group-card table {width:100%;border-collapse:collapse;font-size:.9rem}.group-card th{padding:.42rem .5rem;text-align:left;background:rgba(100,110,130,.10);border-bottom:2px solid rgba(80,90,110,.3)}
     .group-card td{padding:.4rem .5rem;border-bottom:1px solid rgba(90,100,120,.20)}.group-card tr.qualifier{background:rgba(55,150,90,.13)}
+    a.robot-link{color:inherit!important;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;font-weight:inherit}
+    .profile-nav{margin:.2rem 0 .9rem}.profile-nav a{font-weight:800;text-decoration:none}
+    .profile-card{border:2px solid rgba(90,100,120,.35);border-radius:16px;padding:1rem;margin:.45rem 0 1rem;background:rgba(120,130,145,.05)}
+    .profile-name{font-size:2rem;font-weight:950;line-height:1.05}.profile-meta{margin-top:.3rem;opacity:.76}
+    .profile-links{display:flex;flex-wrap:wrap;gap:.42rem;margin:.4rem 0 1rem}.profile-chip{border:1px solid rgba(90,100,120,.3);border-radius:999px;padding:.34rem .62rem;background:rgba(120,130,145,.06);text-decoration:none!important;font-weight:750}
+    .profile-photo{border-radius:14px;overflow:hidden;border:1px solid rgba(90,100,120,.25)}
     @media (min-width: 850px){.queue-pair{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}.prepare-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}}
     @media (max-width: 700px){
       .block-container{padding-left:.55rem;padding-right:.55rem}.event-head{padding:.8rem .85rem}.event-name{font-size:1.62rem}
@@ -68,7 +77,7 @@ def _config():
 def fetch_current():
     base, key = _config()
     endpoint = base + "/rest/v1/live_public_events?select=event_key,event_name,snapshot,updated_at&is_active=eq.true&order=updated_at.desc&limit=1"
-    req = urllib.request.Request(endpoint, headers={"apikey": key, "Accept": "application/json", "User-Agent":"CombatRobotPublicViewer/1.15"})
+    req = urllib.request.Request(endpoint, headers={"apikey": key, "Accept": "application/json", "User-Agent":"CombatRobotPublicViewer/1.16"})
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
             rows = json.loads(response.read().decode("utf-8"))
@@ -80,6 +89,51 @@ def fetch_current():
         st.error(f"Could not reach the live-data service: {exc}")
         return None
     return rows[0] if rows else None
+
+
+def fetch_profile(robot_id: int):
+    base, key = _config()
+    endpoint = base + f"/rest/v1/live_public_robot_profiles?select=profile,updated_at&robot_id=eq.{int(robot_id)}&limit=1"
+    req = urllib.request.Request(endpoint, headers={"apikey": key, "Accept": "application/json", "User-Agent":"CombatRobotPublicViewer/1.16"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        if exc.code in (404, 406):
+            return None
+        st.error(f"Could not load this robot profile (HTTP {exc.code}). {detail[:250]}")
+        return None
+    except Exception as exc:
+        st.error(f"Could not load this robot profile: {exc}")
+        return None
+    return rows[0] if rows else None
+
+
+def robot_link(name, robot_id) -> str:
+    label = html.escape(str(name or "Unknown"))
+    try:
+        rid = int(robot_id)
+    except Exception:
+        return label
+    return f'<a class="robot-link" href="?robot={rid}" target="_self">{label}</a>'
+
+
+def profile_links_html(snapshot: dict) -> str:
+    profiles = snapshot.get("robot_profiles", []) or []
+    if not profiles:
+        return ""
+    links = []
+    for robot in sorted(profiles, key=lambda r: (str(r.get("weight_class", "")), str(r.get("name", "")).casefold())):
+        try:
+            rid = int(robot.get("robot_id"))
+        except Exception:
+            continue
+        name = html.escape(str(robot.get("name") or "Unknown"))
+        weight = html.escape(str(robot.get("weight_class") or ""))
+        suffix = f" · {weight}" if weight else ""
+        links.append(f'<a class="profile-chip" href="?robot={rid}" target="_self">🤖 {name}{suffix}</a>')
+    return '<div class="profile-links">' + "".join(links) + '</div>'
 
 
 def category_parts(value: str):
@@ -99,7 +153,7 @@ def queue_card(row: dict, heading: str, *, now: bool = False) -> str:
     return f"""
     <div class="queue-card {cls}{extra}">
       <div class="queue-role">{html.escape(heading)} &nbsp; {icon} {cat}</div>
-      <div class="queue-match">{html.escape(str(row.get('Robot_1','')))} <span style="opacity:.48">vs</span> {html.escape(str(row.get('Robot_2','')))}</div>
+      <div class="queue-match">{robot_link(row.get('Robot_1',''), row.get('Robot_1_ID'))} <span style="opacity:.48">vs</span> {robot_link(row.get('Robot_2',''), row.get('Robot_2_ID'))}</div>
       <div class="queue-meta">{html.escape(meta)}</div>
     </div>"""
 
@@ -117,7 +171,7 @@ def upcoming_html(rows: list[dict], limit: int = 8) -> str:
         <div class="upcoming-row {cls}">
           <div class="fight-no">#{html.escape(str(row.get('Order','')))}</div>
           <div class="fight-time">{html.escape(estimated)}</div>
-          <div class="fight-match">{icon} {html.escape(str(row.get('Robot_1','')))} <span style="opacity:.45">vs</span> {html.escape(str(row.get('Robot_2','')))}<div class="fight-detail">{html.escape(detail)}</div></div>
+          <div class="fight-match">{icon} {robot_link(row.get('Robot_1',''), row.get('Robot_1_ID'))} <span style="opacity:.45">vs</span> {robot_link(row.get('Robot_2',''), row.get('Robot_2_ID'))}<div class="fight-detail">{html.escape(detail)}</div></div>
           <div class="status-chip">{html.escape(status)}</div>
         </div>""")
     return '<div class="upcoming">' + "".join(rendered) + "</div>"
@@ -140,7 +194,14 @@ def group_card(rows: list[dict], group_number: int) -> str:
     body = []
     for row in rows:
         qualifier = str(row.get("Qualifies", "")).casefold() == "yes"
-        cells = "".join(f"<td>{html.escape('' if row.get(c) is None else str(row.get(c)))}</td>" for c in columns)
+        cell_parts = []
+        for c in columns:
+            if c == "Robot":
+                value = robot_link(row.get("Robot"), row.get("Robot_ID"))
+            else:
+                value = html.escape('' if row.get(c) is None else str(row.get(c)))
+            cell_parts.append(f"<td>{value}</td>")
+        cells = "".join(cell_parts)
         body.append(f"<tr class={'qualifier' if qualifier else ''}>{cells}</tr>")
     return f'<div class="group-card"><div class="group-title">Group {group_letter(group_number)}</div><div style="overflow-x:auto"><table><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div></div>'
 
@@ -199,6 +260,77 @@ def render_standings(snapshot: dict):
                 st.dataframe(pd.DataFrame(finals), hide_index=True, use_container_width=True)
 
 
+def render_profile(robot_id: int, current_snapshot: dict | None = None):
+    row = fetch_profile(robot_id)
+    st.markdown('<div class="profile-nav"><a href="?" target="_self">← Back to live competition</a></div>', unsafe_allow_html=True)
+    if not row:
+        st.warning("This robot profile is not available yet. The organiser may need to run the Version 1.16 Supabase profile upgrade and publish the event again.")
+        return
+    profile = row.get("profile") or {}
+    name = str(profile.get("name") or "Robot")
+    weight = str(profile.get("weight_class") or "")
+    teams = ", ".join(profile.get("teams") or []) or "Team not recorded"
+    st.markdown(
+        f'<div class="profile-card"><div class="profile-name">🤖 {html.escape(name)}</div><div class="profile-meta">{html.escape(weight)} · {html.escape(teams)}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    photos = profile.get("photos") or []
+    if photos:
+        cols = st.columns(min(3, len(photos)))
+        for idx, photo in enumerate(photos[:3]):
+            try:
+                image_bytes = base64.b64decode(str(photo.get("data_base64") or ""))
+            except Exception:
+                continue
+            with cols[idx % len(cols)]:
+                caption = str(photo.get("caption") or name)
+                st.image(image_bytes, caption=caption, use_container_width=True)
+
+    rec = profile.get("record") or {}
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Fights", rec.get("fights", 0))
+    m2.metric("Wins", rec.get("wins", 0))
+    m3.metric("Losses", rec.get("losses", 0))
+    m4.metric("Events", rec.get("events", 0))
+
+    podium = profile.get("podium_counts") or {}
+    st.markdown('<div class="section-title">Competition achievements</div>', unsafe_allow_html=True)
+    p1, p2, p3 = st.columns(3)
+    p1.metric("🥇 Wins", podium.get("first", 0))
+    p2.metric("🥈 Seconds", podium.get("second", 0))
+    p3.metric("🥉 Thirds", podium.get("third", 0))
+
+    ratings = profile.get("ratings") or []
+    if ratings:
+        st.markdown('<div class="section-title">Current Elo ratings</div>', unsafe_allow_html=True)
+        rating_df = pd.DataFrame(ratings).rename(columns={
+            "pool":"Ranking pool", "fights":"Fights", "wins":"Wins", "draws":"Draws",
+            "losses":"Losses", "rating":"Rating", "competition_type":"Type"
+        })
+        cols = [c for c in ["Ranking pool","Fights","Wins","Draws","Losses","Rating"] if c in rating_df.columns]
+        st.dataframe(rating_df[cols], hide_index=True, use_container_width=True)
+
+    placements = profile.get("placements") or []
+    if placements:
+        st.markdown('<div class="section-title">Podium history</div>', unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(placements), hide_index=True, use_container_width=True)
+
+    recent = profile.get("recent_fights") or []
+    if recent:
+        st.markdown('<div class="section-title">Recent fights</div>', unsafe_allow_html=True)
+        recent_df = pd.DataFrame(recent).rename(columns={
+            "date":"Date", "event":"Event", "division":"Division", "type":"Type",
+            "stage":"Stage", "opponent":"Opponent", "outcome":"Result", "score":"Score"
+        })
+        st.dataframe(recent_df, hide_index=True, use_container_width=True)
+
+    aliases = profile.get("aliases") or []
+    if aliases:
+        st.caption("Also known as: " + ", ".join(str(x) for x in aliases))
+    st.caption("Public robot profile · Photos are resized public copies; the organiser retains the originals locally.")
+
+
 def render_snapshot(snapshot: dict, updated_at: str):
     event = snapshot.get("event", {})
     metrics = snapshot.get("metrics", {})
@@ -244,6 +376,11 @@ def render_snapshot(snapshot: dict, updated_at: str):
 
     render_standings(snapshot)
 
+    profile_links = profile_links_html(snapshot)
+    if profile_links:
+        st.markdown('<div class="section-title">Robot profiles</div>', unsafe_allow_html=True)
+        st.markdown(profile_links, unsafe_allow_html=True)
+
     st.markdown('<div class="section-title">Fight schedule and results</div>', unsafe_allow_html=True)
     if schedule.empty:
         st.info("No fights have been published yet.")
@@ -266,6 +403,13 @@ def render_snapshot(snapshot: dict, updated_at: str):
 
 @st.fragment(run_every="5s")
 def live_board():
+    robot_param = st.query_params.get("robot")
+    if robot_param:
+        try:
+            render_profile(int(robot_param))
+        except (TypeError, ValueError):
+            st.error("That robot profile link is invalid.")
+        return
     row = fetch_current()
     if not row:
         st.info("There is no active published competition right now. Try again once the organiser enables Online Builder View.")
