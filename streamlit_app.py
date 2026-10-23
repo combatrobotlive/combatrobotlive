@@ -280,13 +280,18 @@ def render_profile(robot_id: int, current_snapshot: dict | None = None):
     if photos:
         cols = st.columns(min(3, len(photos)))
         for idx, photo in enumerate(photos[:3]):
-            try:
-                image_bytes = base64.b64decode(str(photo.get("data_base64") or ""))
-            except Exception:
-                continue
             with cols[idx % len(cols)]:
                 caption = str(photo.get("caption") or name)
-                st.image(io.BytesIO(image_bytes), caption=caption, use_container_width=True)
+                photo_url = str(photo.get("url") or "").strip()
+                if photo_url:
+                    st.image(photo_url, caption=caption, use_container_width=True)
+                    continue
+                try:
+                    image_bytes = base64.b64decode(str(photo.get("data_base64") or ""))
+                except Exception:
+                    continue
+                if image_bytes:
+                    st.image(io.BytesIO(image_bytes), caption=caption, use_container_width=True)
 
     rec = profile.get("record") or {}
     m1, m2, m3, m4 = st.columns(4)
