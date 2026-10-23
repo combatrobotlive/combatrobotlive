@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import base64
 import html
+import io
 import json
 import urllib.error
 import urllib.request
@@ -285,7 +286,7 @@ def render_profile(robot_id: int, current_snapshot: dict | None = None):
                 continue
             with cols[idx % len(cols)]:
                 caption = str(photo.get("caption") or name)
-                st.image(image_bytes, caption=caption, use_container_width=True)
+                st.image(io.BytesIO(image_bytes), caption=caption, use_container_width=True)
 
     rec = profile.get("record") or {}
     m1, m2, m3, m4 = st.columns(4)
